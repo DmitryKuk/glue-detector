@@ -50,7 +50,6 @@ main(int argc, char **argv)
 					delay = ((delay == 0)? 1: 0);
 					continue;	// Continue cycle
 				case 'n':	// Next
-					cap.set(cv::CAP_PROP_POS_FRAMES, frame + 1);
 					break;
 				case 'b':	// Previous
 					cap.set(cv::CAP_PROP_POS_FRAMES, frame - 2);
