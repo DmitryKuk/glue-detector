@@ -1,4 +1,4 @@
 # Author: Dmitry Kukovinets (d1021976@gmail.com), 27.02.2016, 13:55
 
 
-exe glue-detector : main.cpp /lib//opencv_core /lib//opencv_videoio /lib//opencv_highgui ;
+exe glue-detector : main.cpp /lib//opencv_core /lib//opencv_videoio /lib//opencv_imgproc /lib//opencv_highgui ;

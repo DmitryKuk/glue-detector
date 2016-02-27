@@ -33,6 +33,11 @@ lib opencv_videoio : : <name>opencv_videoio <host-os>darwin:<search>/opt/local/l
 explicit opencv_videoio ;
 
 
+# OpenCV imgproc
+lib opencv_imgproc : : <name>opencv_imgproc <host-os>darwin:<search>/opt/local/lib : : <library>opencv_include ;
+explicit opencv_imgproc ;
+
+
 # OpenCV highgui
 lib opencv_highgui : : <name>opencv_highgui <host-os>darwin:<search>/opt/local/lib : : <library>opencv_include ;
 explicit opencv_highgui ;
