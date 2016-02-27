@@ -1,0 +1,38 @@
+# Author: Dmitry Kukovinets (d1021976@gmail.com), 27.02.2016, 13:27
+
+
+# Project config
+project glue-detector
+	: default-build release
+	: build-dir bin
+	: requirements <threading>multi
+	;
+
+
+# Sources subproject
+build-project src ;
+
+
+
+# Libraries
+project lib ;
+
+
+# Includes for OpenCV
+alias opencv_include : : : : <host-os>darwin:<include>/opt/local/include ;
+explicit opencv_include ;
+
+
+# OpenCV core
+lib opencv_core : : <name>opencv_core <host-os>darwin:<search>/opt/local/lib : : <library>opencv_include ;
+explicit opencv_core ;
+
+
+# OpenCV videoio
+lib opencv_videoio : : <name>opencv_videoio <host-os>darwin:<search>/opt/local/lib : : <library>opencv_include ;
+explicit opencv_videoio ;
+
+
+# OpenCV highgui
+lib opencv_highgui : : <name>opencv_highgui <host-os>darwin:<search>/opt/local/lib : : <library>opencv_include ;
+explicit opencv_highgui ;
