@@ -11,6 +11,32 @@
 #include <opencv2/highgui.hpp>
 
 
+std::string
+type2str(int type)
+{
+	std::string res;
+	
+	uchar depth = type & CV_MAT_DEPTH_MASK;
+	uchar chans = 1 + (type >> CV_CN_SHIFT);
+	
+	switch ( depth ) {
+		case CV_8U:  res = "8U"; break;
+		case CV_8S:  res = "8S"; break;
+		case CV_16U: res = "16U"; break;
+		case CV_16S: res = "16S"; break;
+		case CV_32S: res = "32S"; break;
+		case CV_32F: res = "32F"; break;
+		case CV_64F: res = "64F"; break;
+		default:     res = "User"; break;
+	}
+	
+	res += "C";
+	res += (chans + '0');
+	
+	return res;
+}
+
+
 unsigned long long
 white_pixels(const cv::Mat &mat)
 {
@@ -49,7 +75,7 @@ main(int argc, char **argv)
 #ifdef INTERACTIVE
 	const std::string
 		original_window	= "original_window",
-		edge_window		= "edge_window",
+		// edge_window		= "edge_window",
 		trackbar		= "Frame";
 	
 	int trackbar_frame = 0;
@@ -59,18 +85,22 @@ main(int argc, char **argv)
 	cv::createTrackbar(trackbar, original_window,
 					   &trackbar_frame, frame_count);
 	
-	cv::namedWindow(edge_window);
+	// cv::namedWindow(edge_window);
 	
 	std::cout << "Press space to play/pause, 'n' to next frame, 'b' to previous frame." << std::endl;
 	
 	int delay = 0;
+	bool prev_was_cut = false;
 #endif	// ifdef INTERACTIVE
 	
 	
 	std::cout << "Frames count: " << frame_count << std::endl;
 	
 	
-	cv::Mat mat, edge_mat, gauss_edge_mat;
+	cv::Mat mat;
+	// cv::Mat edge_mat;
+	cv::Mat gauss_edge_mat;
+	cv::Mat avg_row, avg_elem;
 	
 	while (true) {
 		cap >> mat;
@@ -103,38 +133,61 @@ main(int argc, char **argv)
 		cv::setWindowTitle(original_window,
 						   "Frame: " + std::to_string(frame) + ",  Time: " + std::to_string(time) + "ms");
 		
+		cv::reduce(mat, avg_row, 0, cv::REDUCE_AVG);
+		cv::reduce(avg_row, avg_elem, 1, cv::REDUCE_AVG);
+		// // cv::Mat tmp{avg_row.size[0], avg_row.size[1], avg_elem.type(), avg_elem.at<double>(0, 0)};
+		
+		// for (int i = 0; i < 50; ++i)
+		// 	mat.push_back(avg_row);
+		
 		cv::imshow(original_window, mat);
 #endif	// ifdef INTERACTIVE
 		
 		
-		cv::Canny(mat, edge_mat, 50, 50);
+		// cv::Canny(mat, edge_mat, 10, 10);
 		
 		cv::cvtColor(mat, gauss_edge_mat, cv::COLOR_BGR2GRAY);
 		cv::GaussianBlur(gauss_edge_mat, gauss_edge_mat, cv::Size(9, 9), 2, 2);
-		cv::Canny(gauss_edge_mat, gauss_edge_mat, 50, 50);
+		cv::Canny(gauss_edge_mat, gauss_edge_mat, 10, 10);
 		
 		
-		double k = static_cast<double>(100) / (mat.size[0] * mat.size[1]);
-		auto wp = white_pixels(edge_mat),
-			 gauss_wp = white_pixels(gauss_edge_mat);
+		double k = static_cast<double>(100) / mat.total();
+		// auto wp = white_pixels(edge_mat) * k;
+		auto gauss_wp = white_pixels(gauss_edge_mat) * k;
+		cv::Vec3b avg_color = avg_elem.at<cv::Vec3b>(0, 0);
+		unsigned int ar = avg_color[2],
+					 ag = avg_color[1],
+					 ab = avg_color[0];
+		
+		
+		bool is_cut =    (gauss_wp < 5 && ar > 100 && ag >   0 && ab >   0)
+					  || (gauss_wp < 2 && ar >  10 && ag >  10 && ab >  10)
+					  || (                ar <   5 && ag <   5 && ab <   5);
+		
 		
 		std::cout
+			// << type2str(mat.type()) << " "
 			<< std::setw(6) << frame << ":    "
-			<< std::setw(6) << wp << ":  "
-			<< std::setw(8) << std::fixed << wp * k << "%;    Gauss:  "
-			<< std::setw(6) << gauss_wp << ":  "
-			<< std::setw(8) << std::fixed << gauss_wp * k << '%'
+			// << std::setw(9) << std::fixed << wp << "%;    "
+			<< std::setw(9) << std::fixed << gauss_wp << "%;  "
+			<< "  R: " << std::setw(3) << ar
+			<< "  G: " << std::setw(3) << ag
+			<< "  B: " << std::setw(3) << ab
+			<< ((is_cut)? "  CUT DETECTED!": "")
 			<< std::endl;
 		
+// #ifdef INTERACTIVE
+// 		cv::setWindowTitle(edge_window,
+// 						   "White pixels: "/* + std::to_string(wp) + "%; Gauss: "*/ + std::to_string(gauss_wp) + '%');
+// 		cv::imshow(edge_window, edge_mat);
+// #endif	// ifdef INTERACTIVE
+		
 		
 #ifdef INTERACTIVE
-		cv::setWindowTitle(edge_window,
-						   "White pixels: " + std::to_string(wp * k) + "; Gauss: " + std::to_string(gauss_wp * k));
-		cv::imshow(edge_window, edge_mat);
-#endif	// ifdef INTERACTIVE
+		if (prev_was_cut ^ is_cut)	// Pause, if something changed
+			delay = 0;
+		prev_was_cut = is_cut;
 		
-		
-#ifdef INTERACTIVE
 		// Primitive player
 		auto key = cv::waitKey(delay);
 		if (key >= 0) {
