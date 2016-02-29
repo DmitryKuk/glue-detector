@@ -10,6 +10,8 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
+#define INTERACTIVE
+
 
 std::string
 type2str(int type)
@@ -126,10 +128,10 @@ main(int argc, char **argv)
 #endif	// ifdef INTERACTIVE
 		
 		
+		unsigned long long time = cap.get(cv::CAP_PROP_POS_MSEC);
 #ifdef INTERACTIVE
 		cv::setTrackbarPos(trackbar, original_window, frame);	// Keep trackbar actual
 		
-		double time = cap.get(cv::CAP_PROP_POS_MSEC);
 		cv::setWindowTitle(original_window,
 						   "Frame: " + std::to_string(frame) + ",  Time: " + std::to_string(time) + "ms");
 		
@@ -160,14 +162,14 @@ main(int argc, char **argv)
 					 ab = avg_color[0];
 		
 		
-		bool is_cut =    (gauss_wp < 5 && ar > 100 && ag >   0 && ab >   0)
-					  || (gauss_wp < 2 && ar >  10 && ag >  10 && ab >  10)
-					  || (                ar <   5 && ag <   5 && ab <   5);
+		bool is_cut =    (gauss_wp < 4.5 && ar > 100 && ag >   0 && ab >   0)
+					  || (gauss_wp < 2   && ar >  30 && ag >  30 && ab >  30)
+					  || (                  ar <   5 && ag <   5 && ab <   5);
 		
 		
 		std::cout
 			// << type2str(mat.type()) << " "
-			<< std::setw(6) << frame << ":    "
+			<< std::setw(6) << frame << "  -  " << std::setw(6) << time << "ms:    "
 			// << std::setw(9) << std::fixed << wp << "%;    "
 			<< std::setw(9) << std::fixed << gauss_wp << "%;  "
 			<< "  R: " << std::setw(3) << ar
