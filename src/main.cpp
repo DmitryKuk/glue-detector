@@ -4,13 +4,15 @@
 #include <iomanip>
 #include <string>
 #include <atomic>
+// #include <cmath>
+// #include <future>
+// #include <array>
+// #include <queue>
 
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
-
-#define INTERACTIVE
 
 
 std::string
@@ -39,7 +41,7 @@ type2str(int type)
 }
 
 
-unsigned long long
+double
 white_pixels(const cv::Mat &mat)
 {
 	std::atomic<unsigned long long> n{0};
@@ -52,8 +54,106 @@ white_pixels(const cv::Mat &mat)
 		}
 	);
 	
-	return n;
+	return static_cast<double>(n) * 100 / mat.total();
 }
+
+
+// double
+// enthropy(const cv::Mat &mat)
+// {
+// 	std::array<unsigned int, 256> red, green, blue;
+// 	// unsigned int total = 0;
+	
+// 	for (unsigned int i = 0, i_max = mat.size[0]; i < i_max; ++i)
+// 		for (unsigned int j = 0, j_max = mat.size[1]; j < j_max; ++j) {
+// 			auto v = mat.at<cv::Vec3b>(i, j);
+			
+// 			++red[v[2]];
+// 			++green[v[1]];
+// 			++blue[v[0]];
+// 		}
+	
+	
+// 	auto total = mat.total();
+	
+// 	const auto color_entropy =
+// 		[&](const auto &color) -> double
+// 		{
+// 			std::priority_queue<double, std::vector<double>, std::function<bool (double, double)>> queue{
+// 				[](double a, double b) -> bool { return std::abs(a) < std::abs(b); }
+// 			};
+			
+// 			for (double x: color) {
+// 				auto w = x / total;
+// 				if (w > 0)
+// 					queue.push(w * std::log2(w));
+// 			}
+			
+// 			while (queue.size() > 1) {
+// 				auto x1 = queue.top();
+// 				queue.pop();
+				
+// 				auto x2 = queue.top();
+// 				queue.pop();
+				
+// 				queue.push(x1 + x2);
+// 			}
+			
+// 			return queue.top();
+// 		};
+	
+// 	std::future<double> green_entropy = std::async(color_entropy, green),
+// 						blue_entropy  = std::async(color_entropy, blue);
+	
+// 	double sum = color_entropy(red) + green_entropy.get() + blue_entropy.get();
+	
+// 	return -sum;
+// }
+
+
+// double
+// gray_enthropy(const cv::Mat &mat)
+// {
+// 	std::array<unsigned int, 256> gray;
+// 	// unsigned int total = 0;
+	
+// 	for (unsigned int i = 0, i_max = mat.size[0]; i < i_max; ++i)
+// 		for (unsigned int j = 0, j_max = mat.size[1]; j < j_max; ++j) {
+// 			auto pixel = mat.at<uint8_t>(i, j);
+// 			++gray[pixel];
+// 		}
+	
+	
+// 	auto total = mat.total();
+	
+// 	const auto color_entropy =
+// 		[&](const auto &color) -> double
+// 		{
+// 			std::priority_queue<double, std::vector<double>, std::function<bool (double, double)>> queue{
+// 				[](double a, double b) -> bool { return std::abs(a) < std::abs(b); }
+// 			};
+			
+// 			for (double x: color) {
+// 				auto w = x / total;
+// 				if (w > 0)
+// 					queue.push(w * std::log2(w));
+// 			}
+			
+// 			while (queue.size() > 1) {
+// 				auto x1 = queue.top();
+// 				queue.pop();
+				
+// 				auto x2 = queue.top();
+// 				queue.pop();
+				
+// 				queue.push(x1 + x2);
+// 			}
+			
+// 			return queue.top();
+// 		};
+	
+// 	return -color_entropy(gray);
+// }
 
 
 int
@@ -74,10 +174,8 @@ main(int argc, char **argv)
 	int frame_count = cap.get(cv::CAP_PROP_FRAME_COUNT);
 	
 	
-#ifdef INTERACTIVE
 	const std::string
 		original_window	= "original_window",
-		// edge_window		= "edge_window",
 		trackbar		= "Frame";
 	
 	int trackbar_frame = 0;
@@ -87,131 +185,155 @@ main(int argc, char **argv)
 	cv::createTrackbar(trackbar, original_window,
 					   &trackbar_frame, frame_count);
 	
-	// cv::namedWindow(edge_window);
-	
 	std::cout << "Press space to play/pause, 'n' to next frame, 'b' to previous frame." << std::endl;
 	
 	int delay = 0;
 	bool prev_was_cut = false;
-#endif	// ifdef INTERACTIVE
 	
 	
 	std::cout << "Frames count: " << frame_count << std::endl;
 	
 	
 	cv::Mat mat;
-	// cv::Mat edge_mat;
-	cv::Mat gauss_edge_mat;
+	cv::Mat edge_mat;
 	cv::Mat avg_row, avg_elem;
+	
+	double prev_wp = 0, prev_ar = 0, prev_ag = 0, prev_ab = 0;
+	
 	
 	while (true) {
 		cap >> mat;
 		
 		if (mat.size[0] <= 0) {	// End of file reached
 			cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-#ifdef INTERACTIVE
 			cv::setTrackbarPos(trackbar, original_window, 0);
-			continue;	// Start again in interactive mode
-#else	// ifdef INTERACTIVE
-			break;		// Stop in non-interactive mode
-#endif	// ifdef INTERACTIVE
+			continue;	// Start again
 		}
 		
 		
 		int frame = cap.get(cv::CAP_PROP_POS_FRAMES);
 		
-#ifdef INTERACTIVE
 		if (trackbar_frame + 1 != frame) {	// Trackbar navigation
 			cap.set(cv::CAP_PROP_POS_FRAMES, trackbar_frame);
 			continue;
 		}
-#endif	// ifdef INTERACTIVE
 		
 		
 		unsigned long long time = cap.get(cv::CAP_PROP_POS_MSEC);
-#ifdef INTERACTIVE
+		
 		cv::setTrackbarPos(trackbar, original_window, frame);	// Keep trackbar actual
 		
 		cv::setWindowTitle(original_window,
 						   "Frame: " + std::to_string(frame) + ",  Time: " + std::to_string(time) + "ms");
 		
+		cv::imshow(original_window, mat);
+		
+		
+		// White pixels metric (found edges)
+		cv::cvtColor(mat, edge_mat, cv::COLOR_BGR2GRAY);
+		cv::GaussianBlur(edge_mat, edge_mat, cv::Size(9, 9), 2, 2);
+		cv::Canny(edge_mat, edge_mat, 10, 10);
+		
+		auto wp = white_pixels(edge_mat);
+		
+		
+		// Avarage frame color
 		cv::reduce(mat, avg_row, 0, cv::REDUCE_AVG);
 		cv::reduce(avg_row, avg_elem, 1, cv::REDUCE_AVG);
-		// // cv::Mat tmp{avg_row.size[0], avg_row.size[1], avg_elem.type(), avg_elem.at<double>(0, 0)};
 		
-		// for (int i = 0; i < 50; ++i)
-		// 	mat.push_back(avg_row);
-		
-		cv::imshow(original_window, mat);
-#endif	// ifdef INTERACTIVE
-		
-		
-		// cv::Canny(mat, edge_mat, 10, 10);
-		
-		cv::cvtColor(mat, gauss_edge_mat, cv::COLOR_BGR2GRAY);
-		cv::GaussianBlur(gauss_edge_mat, gauss_edge_mat, cv::Size(9, 9), 2, 2);
-		cv::Canny(gauss_edge_mat, gauss_edge_mat, 10, 10);
-		
-		
-		double k = static_cast<double>(100) / mat.total();
-		// auto wp = white_pixels(edge_mat) * k;
-		auto gauss_wp = white_pixels(gauss_edge_mat) * k;
 		cv::Vec3b avg_color = avg_elem.at<cv::Vec3b>(0, 0);
+		
 		unsigned int ar = avg_color[2],
 					 ag = avg_color[1],
 					 ab = avg_color[0];
 		
 		
-		bool is_cut =    (gauss_wp < 4.5 && ar > 100 && ag >   0 && ab >   0)
-					  || (gauss_wp < 2   && ar >  30 && ag >  30 && ab >  30)
-					  || (                  ar <   5 && ag <   5 && ab <   5);
+		// Delta from previous frame
+		// double wp_delta = (wp - prev_wp) / (2 * (wp + prev_wp));
+		double delta = (  std::abs(2 * (wp - prev_wp) / (wp + prev_wp))
+						+ std::abs(2 * static_cast<double>(ar - prev_ar) / (ar + prev_ar))
+						+ std::abs(2 * static_cast<double>(ag - prev_ag) / (ag + prev_ag))
+						+ std::abs(2 * static_cast<double>(ab - prev_ab) / (ab + prev_ab))) * 25;
+		
+		double abs_delta = (  std::abs((wp - prev_wp))
+							+ std::abs(static_cast<double>(ar - prev_ar) / 255)
+							+ std::abs(static_cast<double>(ag - prev_ag) / 255)
+							+ std::abs(static_cast<double>(ab - prev_ab) / 255)) * 25;
+		
+		
+		bool is_cut = false;
+		if (wp > 10) {
+			is_cut = false;
+		} else {
+			if (   (wp < 4.5 && ar > 100 && ag >   0 && ab >   0)
+				|| (wp < 3   && ar >  30 && ag >  30 && ab >  30)
+				|| (                  ar <   5 && ag <   5 && ab <   5))
+				is_cut = true;
+			
+			if (prev_was_cut ^ is_cut)
+				if (abs_delta < 10)
+					is_cut = prev_was_cut;
+		}
+		
+		
+		if (prev_was_cut ^ is_cut)	// Pause, if something changed
+			delay = 0;
+		
+		
+		prev_was_cut = is_cut;
+		prev_wp = wp;
+		prev_ar = ar;
+		prev_ag = ag;
+		prev_ab = ab;
+		
+		
+		// if (prev_was_cut ^ is_cut) {	// Current frame is different type than previous
+		// 	if (prev_was_cut) {
+				
+		// 	} else {
+				
+		// 	}
+		// } else {
+		// 	if (prev_was_cut)
+		// 		++cut_len;
+		// 	else
+		// 		++content_len;
+		// }
 		
 		
 		std::cout
 			// << type2str(mat.type()) << " "
 			<< std::setw(6) << frame << "  -  " << std::setw(6) << time << "ms:    "
 			// << std::setw(9) << std::fixed << wp << "%;    "
-			<< std::setw(9) << std::fixed << gauss_wp << "%;  "
+			<< std::setw(9) << std::fixed << wp << "%;  "
+			// << std::setw(10) << std::fixed << delta << "%;  "
+			<< std::setw(10) << std::fixed << abs_delta << "%;  "
 			<< "  R: " << std::setw(3) << ar
 			<< "  G: " << std::setw(3) << ag
 			<< "  B: " << std::setw(3) << ab
 			<< ((is_cut)? "  CUT DETECTED!": "")
 			<< std::endl;
 		
-// #ifdef INTERACTIVE
-// 		cv::setWindowTitle(edge_window,
-// 						   "White pixels: "/* + std::to_string(wp) + "%; Gauss: "*/ + std::to_string(gauss_wp) + '%');
-// 		cv::imshow(edge_window, edge_mat);
-// #endif	// ifdef INTERACTIVE
-		
-		
-#ifdef INTERACTIVE
-		if (prev_was_cut ^ is_cut)	// Pause, if something changed
-			delay = 0;
-		prev_was_cut = is_cut;
 		
 		// Primitive player
 		auto key = cv::waitKey(delay);
-		if (key >= 0) {
-			switch (key) {
-				case ' ':	// Play/pause
-					delay = ((delay == 0)? 1: 0);
-					continue;	// Continue cycle
-				case 'n':	// Next
-					break;
-				case 'b':	// Previous
-					cap.set(cv::CAP_PROP_POS_FRAMES, frame - 2);
-					cv::setTrackbarPos(trackbar, original_window, frame - 2);
-					break;
-			}
+		switch (key) {
+			case -1:	// Key not pressed
+				break;
+			case ' ':	// Play/pause
+				delay = ((delay == 0)? 1: 0);
+				break;
+			case 'n':	// Next
+				break;
+			case 'b':	// Previous
+				cap.set(cv::CAP_PROP_POS_FRAMES, frame - 2);
+				cv::setTrackbarPos(trackbar, original_window, frame - 2);
+				break;
 		}
-#endif	// ifdef INTERACTIVE
 	}
 	
 	
-#ifdef INTERACTIVE
 	cv::destroyAllWindows();
-#endif	// ifdef INTERACTIVE
 	
 	return 0;
 }
