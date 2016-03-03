@@ -193,12 +193,14 @@ main(int argc, char **argv)
 	
 	std::cout << "Frames count: " << frame_count << std::endl;
 	
+	std::cout << std::setprecision(3) << std::fixed;
+	
 	
 	cv::Mat mat;
 	cv::Mat edge_mat;
 	cv::Mat avg_row, avg_elem;
 	
-	double prev_wp = 0, prev_ar = 0, prev_ag = 0, prev_ab = 0;
+	double prev_wp = 0, prev_ar = 0, prev_ag = 0, prev_ab = 0, prev_gb_dom = 0;
 	
 	
 	while (true) {
@@ -243,36 +245,43 @@ main(int argc, char **argv)
 		
 		cv::Vec3b avg_color = avg_elem.at<cv::Vec3b>(0, 0);
 		
-		unsigned int ar = avg_color[2],
-					 ag = avg_color[1],
-					 ab = avg_color[0];
+		int ar = avg_color[2],
+				 ag = avg_color[1],
+				 ab = avg_color[0];
+		
+		
+		double gb_dom = 0;
+		if (ag + ar != 0 && ab + ar != 0)
+			gb_dom = (static_cast<double>(ag - ar) / (ag + ar) + static_cast<double>(ab - ar) / (ab + ar)) * 100;
 		
 		
 		// Delta from previous frame
-		// double wp_delta = (wp - prev_wp) / (2 * (wp + prev_wp));
-		double delta = (  std::abs(2 * (wp - prev_wp) / (wp + prev_wp))
-						+ std::abs(2 * static_cast<double>(ar - prev_ar) / (ar + prev_ar))
-						+ std::abs(2 * static_cast<double>(ag - prev_ag) / (ag + prev_ag))
-						+ std::abs(2 * static_cast<double>(ab - prev_ab) / (ab + prev_ab))) * 25;
+		double wp_delta = wp - prev_wp;
 		
-		double abs_delta = (  std::abs((wp - prev_wp))
-							+ std::abs(static_cast<double>(ar - prev_ar) / 255)
-							+ std::abs(static_cast<double>(ag - prev_ag) / 255)
-							+ std::abs(static_cast<double>(ab - prev_ab) / 255)) * 25;
+		double color_delta = (  static_cast<double>(ar - prev_ar) / 255
+							  + static_cast<double>(ag - prev_ag) / 255
+							  + static_cast<double>(ab - prev_ab) / 255) * 100 / 3;
+		
+		double gb_dom_delta = gb_dom - prev_gb_dom;
 		
 		
 		bool is_cut = false;
 		if (wp > 10) {
 			is_cut = false;
 		} else {
-			if (   (wp < 4.5 && ar > 100 && ag >   0 && ab >   0)
-				|| (wp < 3   && ar >  30 && ag >  30 && ab >  30)
-				|| (                  ar <   5 && ag <   5 && ab <   5))
+			if (   (wp < 4.5 && (ar > 100                        ) && gb_dom < 20)
+				|| (wp < 3   && (ar >  30 || ag >  30 || ab >  30) && gb_dom < 20)
+				|| (            (ar <   3 && ag <   3 && ab <   3)               )
+				|| (wp < 1                                                       ))
 				is_cut = true;
 			
-			if (prev_was_cut ^ is_cut)
-				if (abs_delta < 10)
-					is_cut = prev_was_cut;
+			
+			if (!prev_was_cut && is_cut && color_delta < 0 && gb_dom < 0 && (wp > 1 || (ar < 5 && ag < 5 && ab < 5)))
+				is_cut = false;
+			else if (prev_was_cut && !is_cut && (wp_delta < 2 || wp < 3 || gb_dom < -50))
+				is_cut = true;
+			else if ((prev_was_cut ^ is_cut) && (std::abs(wp_delta) < 2.5) && (std::abs(color_delta) < 10))
+				is_cut = prev_was_cut;
 		}
 		
 		
@@ -285,6 +294,7 @@ main(int argc, char **argv)
 		prev_ar = ar;
 		prev_ag = ag;
 		prev_ab = ab;
+		prev_gb_dom = gb_dom;
 		
 		
 		// if (prev_was_cut ^ is_cut) {	// Current frame is different type than previous
@@ -304,14 +314,15 @@ main(int argc, char **argv)
 		std::cout
 			// << type2str(mat.type()) << " "
 			<< std::setw(6) << frame << "  -  " << std::setw(6) << time << "ms:    "
-			// << std::setw(9) << std::fixed << wp << "%;    "
-			<< std::setw(9) << std::fixed << wp << "%;  "
-			// << std::setw(10) << std::fixed << delta << "%;  "
-			<< std::setw(10) << std::fixed << abs_delta << "%;  "
-			<< "  R: " << std::setw(3) << ar
-			<< "  G: " << std::setw(3) << ag
-			<< "  B: " << std::setw(3) << ab
-			<< ((is_cut)? "  CUT DETECTED!": "")
+			<< "WP:" << std::setw(8) << std::noshowpos << wp
+			<< std::setw(9) << std::showpos << wp_delta << "%;  "
+			<< "  R:" << std::setw(4) << std::noshowpos << ar
+			<< "  G:" << std::setw(4) << std::noshowpos << ag
+			<< "  B:" << std::setw(4) << std::noshowpos << ab
+			<< std::setw(10) << std::showpos << color_delta << "%;"
+			<< "    GB_DOM:" << std::setw(9) << std::showpos << gb_dom
+			<< std::setw(9) << std::showpos << gb_dom_delta << "%;"
+			<< ((is_cut)? "    CUT DETECTED!": "")
 			<< std::endl;
 		
 		
